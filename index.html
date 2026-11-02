@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#1f2937">
+<title>EPS Замер</title>
+<style>
+:root{--bg:#eef0f3;--panel:#fff;--ink:#111827;--mute:#6b7280;--line:#d1d5db;--acc:#2563eb;--hole:#ea580c;--warn:#b45309;--warnbg:#fef3c7}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+button{font:inherit;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:8px 12px;cursor:pointer}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button:active{filter:brightness(.92)}
+#app{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:8px;padding:8px;background:#1f2937;color:#fff}
+header .name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px;opacity:.9}
+header button{background:#374151;border-color:#4b5563;color:#fff;padding:7px 10px}
+#body{flex:1;display:flex;flex-direction:column;min-height:0}
+#work{position:relative;flex:1;min-height:0}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#zoom{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px}
+#zoom button{width:42px;height:42px;padding:0;font-size:20px;box-shadow:0 1px 3px #0002}
+#panel{background:var(--panel);border-top:1px solid var(--line);padding:10px 12px;max-height:42%;overflow:auto}
+@media (orientation:landscape) and (min-width:600px){
+  #body{flex-direction:row}
+  #panel{width:340px;max-height:none;border-top:0;border-left:1px solid var(--line)}
+}
+.ttl{font-weight:600;font-size:16px;margin-bottom:4px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px}
+.kv .k{color:var(--mute)}
+.kv .v{text-align:right;font-variant-numeric:tabular-nums}
+.big{font-size:18px;font-weight:600}
+.sub{color:var(--mute);font-size:13px}
+.warn{background:var(--warnbg);color:var(--warn);border-radius:6px;padding:6px 8px;font-size:13px;margin:6px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#home{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;padding:24px 16px;overflow:auto;z-index:5}
+#home h1{margin:12px 0 4px;font-size:24px}
+#home .open{font-size:18px;padding:14px 28px;margin:18px 0}
+#recent{width:100%;max-width:480px}
+#recent .it{display:flex;justify-content:space-between;gap:8px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;cursor:pointer}
+.modal{position:fixed;inset:0;background:var(--bg);z-index:10;display:none;flex-direction:column}
+.modal.on{display:flex}
+.modal .bar{display:flex;align-items:center;gap:8px;padding:8px;background:#1f2937;color:#fff}
+.modal .bar .t{flex:1;font-weight:600}
+.modal .bar button{background:#374151;border-color:#4b5563;color:#fff;padding:7px 10px}
+.modal .cnt{flex:1;overflow:auto;padding:12px}
+table{border-collapse:collapse;width:100%;background:#fff;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{border:1px solid var(--line);padding:4px 6px;text-align:right;white-space:nowrap}
+th{background:#f3f4f6;font-weight:600}
+td:nth-child(2),th:nth-child(2){text-align:left}
+.tw{overflow-x:auto}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #0003;vertical-align:-2px;margin-right:6px}
+label.chk{display:flex;align-items:center;gap:8px;padding:6px 0}
+input[type=number]{width:90px;font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px}
+select{font:inherit;padding:6px;border:1px solid var(--line);border-radius:6px}
+#busy{position:fixed;inset:0;background:#0006;color:#fff;display:none;align-items:center;justify-content:center;z-index:20;font-size:18px}
+#busy.on{display:flex}
+.ok{color:#15803d;font-weight:600}.no{color:var(--warn);font-weight:600}
+@media print{
+  html,body{overflow:visible;height:auto;background:#fff}
+  #app,#home,#settings,#busy,.noprint{display:none!important}
+  #report{position:static;display:block!important}
+  #report .cnt{overflow:visible;padding:0}
+  .card{border:0;padding:0}
+  th,td{font-size:10px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="bOpen">Открыть</button>
+    <div class="name" id="fname">EPS Замер</div>
+    <button id="bReport">Отчёт</button>
+    <button id="bSet" aria-label="Настройки">⚙</button>
+  </header>
+  <div id="body">
+    <div id="work">
+      <canvas id="cv"></canvas>
+      <div id="zoom">
+        <button id="zIn" aria-label="Приблизить">+</button>
+        <button id="zOut" aria-label="Отдалить">−</button>
+        <button id="zFit" aria-label="Весь лист">⤢</button>
+      </div>
+      <div id="home">
+        <h1>EPS Замер</h1>
+        <div class="sub">Размеры и периметры деталей из EPS (CorelDRAW). Работает без интернета.</div>
+        <button class="pri open" id="bOpen2">Открыть EPS файл</button>
+        <div id="recent"></div>
+      </div>
+    </div>
+    <div id="panel"></div>
+  </div>
+</div>
+
+<div class="modal" id="report">
+  <div class="bar noprint">
+    <button data-close>←</button><div class="t">Отчёт по листу</div>
+    <button id="rCopy">Копировать</button><button id="rCsv">CSV</button><button id="rPdf">PDF</button>
+  </div>
+  <div class="cnt" id="reportBody"></div>
+</div>
+
+<div class="modal" id="settings">
+  <div class="bar"><button data-close>←</button><div class="t">Настройки</div></div>
+  <div class="cnt" id="setBody"></div>
+</div>
+
+<div id="busy">Обработка файла…</div>
+<input type="file" id="file" hidden>
+
+<script>
+'use strict';
+const PT2MM = 25.4 / 72;                 // 72 pt = 1 inch = 25.4 mm
+const LEN_TOL = 1e-7;                    // мм, допуск интегрирования длины Безье
+const FLAT_TOL = 0.005;                  // мм, допуск полигонизации (только для попадания/вложенности/площади)
+const STD_SHEETS = [[1830, 2750], [2070, 2800], [1800, 2400]];
+const $ = id => document.getElementById(id);
+
+/* ================= Чтение EPS ================= */
+
+function latin1(u8) {
+  let s = '';
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return s;
+}
+
+function extractPS(buf) {
+  const u8 = new Uint8Array(buf);
+  if (u8.length < 4) throw new Error('Файл пустой.');
+  if (u8[0] === 0xC5 && u8[1] === 0xD0 && u8[2] === 0xD3 && u8[3] === 0xC6) {
+    // DOS EPS: PostScript + TIFF/WMF превью
+    const dv = new DataView(buf);
+    const off = dv.getUint32(4, true), len = dv.getUint32(8, true);
+    if (!len || off + len > u8.length) throw new Error('Повреждён заголовок бинарного EPS.');
+    return latin1(u8.subarray(off, off + len));
+  }
+  const head = latin1(u8.subarray(0, Math.min(8, u8.length)));
+  if (head.startsWith('%PDF')) throw new Error('Это PDF/AI, а не EPS. В CorelDRAW: Файл → Экспорт → EPS.');
+  if (head.startsWith('RIFF')) throw new Error('Это файл CDR. В CorelDRAW: Файл → Экспорт → EPS.');
+  if (!head.startsWith('%!')) throw new Error('Файл не похож на EPS/PostScript.');
+  return latin1(u8);
+}
+
+function parseDSC(text) {
+  const res = {};
+  const put = (line, override) => {
+    const m = /^%%([A-Za-z]+):\s*(.*?)\s*$/.exec(line);
+    if (!m || m[2] === '(atend)') return;
+    if (override || !(m[1] in res)) res[m[1]] = m[2];
+  };
+  const head = text.slice(0, 65536).split(/\r\n|\r|\n/);
+  for (let i = 0; i < head.length; i++) {
+    const l = head[i];
+    if (l.startsWith('%%EndComments')) break;
+    if (l.startsWith('%%')) put(l);
+    else if (i > 0 && !l.startsWith('%')) break;
+  }
+  const t = text.lastIndexOf('%%Trailer');
+  if (t >= 0) for (const l of text.slice(t).split(/\r\n|\r|\n/)) if (l.startsWith('%%')) put(l, false);
+  const box = v => {
+    if (!v) return null;
+    const a = v.trim().split(/\s+/).map(Number);
+    return a.length === 4 && a.every(Number.isFinite) && a[2] > a[0] && a[3] > a[1] ? a : null;
+  };
+  return { hires: box(res.HiResBoundingBox), bbox: box(res.BoundingBox), creator: res.Creator || '', title: res.Title || '' };
+}
+
+/* --- токенизатор PostScript --- */
+const DELIM = new Set([' ', '\t', '\r', '\n', '\f', '\0', '(', ')', '<', '>', '[', ']', '{', '}', '/', '%']);
+const NUM_RE = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
+class Lexer {
+  constructor(s, pos) { this.s = s; this.i = pos || 0; }
+  skipString() {
+    const s = this.s; let d = 1, j = this.i + 1;
+    while (j < s.length && d > 0) { const c = s[j]; if (c === '\\') { j += 2; continue; } if (c === '(') d++; else if (c === ')') d--; j++; }
+    this.i = j;
+  }
+  next() {
+    const s = this.s, n = s.length;
+    while (this.i < n) {
+      const c = s[this.i];
+      if (c <= ' ') { this.i++; continue; }
+      if (c === '%') {
+        let j = this.i; while (j < n && s[j] !== '\n' && s[j] !== '\r') j++;
+        const v = s.slice(this.i, j); this.i = j; return { t: 'cm', v };
+      }
+      if (c === '(') { this.skipString(); return { t: 'obj' }; }
+      if (c === '<') {
+        if (s[this.i + 1] === '<') { this.i += 2; return { t: 'op', v: '<<' }; }
+        const j = s.indexOf('>', this.i); this.i = j < 0 ? n : j + 1; return { t: 'obj' };
+      }
+      if (c === '>') { this.i += s[this.i + 1] === '>' ? 2 : 1; return { t: 'op', v: '>>' }; }
+      if (c === '[' || c === ']') { this.i++; return { t: 'op', v: c }; }
+      if (c === '{') {
+        let d = 1, j = this.i + 1;
+        while (j < n && d > 0) {
+          const ch = s[j];
+          if (ch === '{') d++; else if (ch === '}') d--;
+          else if (ch === '(') { this.i = j; this.skipString(); j = this.i; continue; }
+          else if (ch === '%') { while (j < n && s[j] !== '\n' && s[j] !== '\r') j++; continue; }
+          j++;
+        }
+        this.i = j; return { t: 'obj' };
+      }
+      if (c === '}' || c === ')') { this.i++; continue; }
+      let j = this.i + (c === '/' ? 1 : 0);
+      while (j < n && !DELIM.has(s[j])) j++;
+      if (c === '/') { const v = s.slice(this.i + 1, j); this.i = j; return { t: 'lit', v }; }
+      const w = s.slice(this.i, j); this.i = j;
+      if (NUM_RE.test(w)) return { t: 'num', v: parseFloat(w) };
+      const r = /^(\d+)#([0-9A-Za-z]+)$/.exec(w);
+      if (r) return { t: 'num', v: parseInt(r[2], +r[1]) };
+      return { t: 'op', v: w };
+    }
+    return null;
+  }
+}
+
+const mul = (a, b) => [a[0] * b[0] + a[1] * b[2], a[0] * b[1] + a[1] * b[3], a[2] * b[0] + a[3] * b[2], a[2] * b[1] + a[3] * b[3], a[4] * b[0] + a[5] * b[2] + b[4], a[4] * b[1] + a[5] * b[3] + b[5]];
+
+/* --- интерпретатор: строит пути так же, как PostScript (с учётом матрицы преобразования) --- */
+function interpret(text) {
+  let start = text.indexOf('%%EndProlog');
+  if (start < 0) start = text.indexOf('%%EndComments');
+  if (start < 0) start = 0;
+  const lx = new Lexer(text, start);
+  const st = [];
+  const objects = [];
+  const warn = new Set();
+  let ctm = [1, 0, 0, 1, 0, 0];
+  let gs = [];
+  let path = [], cur = null, cpu = null; // cur: текущий подпуть; cpu: текущая точка в пользовательских координатах
+  let stroke = [0, 0, 0, 1], fill = [0, 0, 0, 1], lastColor = null, fm = 0, clipPath = false;
+  const marks = [];
+
+  const tr = (x, y) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]];
+  const pop = k => {
+    if (st.length < k) return null;
+    const a = st.splice(st.length - k, k);
+    return a.every(v => typeof v === 'number') ? a : null;
+  };
+  const endSub = () => { if (cur && cur.segs.length) path.push(cur); cur = null; };
+  const moveTo = (x, y) => { endSub(); const p = tr(x, y); cur = { sx: p[0], sy: p[1], x: p[0], y: p[1], segs: [], closed: false }; cpu = [x, y]; };
+  const ensure = () => { if (!cur) { if (!cpu) return false; const p = tr(cpu[0], cpu[1]); cur = { sx: p[0], sy: p[1], x: p[0], y: p[1], segs: [], closed: false }; } return true; };
+  const lineTo = (x, y) => { if (!ensure()) return; const p = tr(x, y); cur.segs.push([cur.x, cur.y, p[0], p[1]]); cur.x = p[0]; cur.y = p[1]; cpu = [x, y]; };
+  const curveTo = (x1, y1, x2, y2, x3, y3) => {
+    if (!ensure()) return;
+    const a = tr(x1, y1), b = tr(x2, y2), c = tr(x3, y3);
+    cur.segs.push([cur.x, cur.y, a[0], a[1], b[0], b[1], c[0], c[1]]); cur.x = c[0]; cur.y = c[1]; cpu = [x3, y3];
+  };
+  const close = () => {
+    if (!cur) return;
+    if (Math.hypot(cur.x - cur.sx, cur.y - cur.sy) > 1e-9) cur.segs.push([cur.x, cur.y, cur.sx, cur.sy]);
+    cur.closed = true; const sx = cur.sx, sy = cur.sy; endSub();
+    // после closepath текущая точка — начало подпути
+    cur = { sx, sy, x: sx, y: sy, segs: [], closed: false };
+  };
+  const newPath = () => { path = []; cur = null; cpu = null; clipPath = false; };
+  const paint = (doStroke, doFill, eo, closeFirst) => {
+    if (closeFirst) close();
+    endSub();
+    if (path.length && !clipPath) objects.push({ subs: path, stroke: doStroke ? stroke : null, fill: doFill ? fill : null, evenodd: eo });
+    newPath();
+  };
+  const save = () => gs.push({ ctm: ctm.slice(), stroke, fill });
+  const restore = () => { const g = gs.pop(); if (g) { ctm = g.ctm; stroke = g.stroke; fill = g.fill; } newPath(); };
+
+  let tok, guard = 0;
+  while ((tok = lx.next())) {
+    if (++guard > 5e7) { warn.add('Файл слишком большой — прочитан не полностью.'); break; }
+    if (tok.t === 'num') { st.push(tok.v); if (st.length > 512) st.splice(0, 256); continue; }
+    if (tok.t === 'lit') { st.push({ lit: tok.v }); continue; }
+    if (tok.t === 'obj') { st.push({ obj: 1 }); continue; }
+    if (tok.t === 'cm') {
+      const v = tok.v;
+      if (v.startsWith('%%Trailer') || v.startsWith('%%EOF')) break;
+      const m = /^%%Begin(?:Data|Binary):\s*(\d+)(?:\s+(\w+)\s+(\w+))?/.exec(v);
+      if (m && (!m[3] || /bytes/i.test(m[3]))) { lx.i += +m[1] + 1; warn.add('В файле есть встроенные двоичные данные (растр/шрифт) — они пропущены.'); }
+      continue;
+    }
+    const op = tok.v;
+    let a;
+    switch (op) {
+      case 'm': case 'moveto': if ((a = pop(2))) moveTo(a[0], a[1]); break;
+      case 'rmoveto': if ((a = pop(2)) && cpu) moveTo(cpu[0] + a[0], cpu[1] + a[1]); break;
+      case 'l': case 'L': case 'lineto': if ((a = pop(2))) lineTo(a[0], a[1]); break;
+      case 'rl': case 'rlineto': if ((a = pop(2)) && cpu) lineTo(cpu[0] + a[0], cpu[1] + a[1]); break;
+      case 'c': case 'C': case 'curveto': if ((a = pop(6))) curveTo(...a); break;
+      case 'rcurveto': if ((a = pop(6)) && cpu) { const [x, y] = cpu; curveTo(x + a[0], y + a[1], x + a[2], y + a[3], x + a[4], y + a[5]); } break;
+      case 'v': case 'V': if ((a = pop(4)) && cpu) curveTo(cpu[0], cpu[1], a[0], a[1], a[2], a[3]); break;
+      case 'y': case 'Y': if ((a = pop(4))) curveTo(a[0], a[1], a[2], a[3], a[2], a[3]); break;
+      case '@c': case 'h': case 'H': case '@cp': case 'closepath': close(); break;
+      case 'n': case 'N': case '@np': case 'newpath': newPath(); break;
+      case 'S': case 'stroke': paint(true, false, false, false); break;
+      case 's': paint(true, false, false, true); break;
+      case 'F': case 'f': case 'fill': paint(false, true, fm === 0, op === 'f'); break;
+      case 'f*': case 'eofill': paint(false, true, true, false); break;
+      case 'B': case '@B': paint(true, true, fm === 0, false); break;
+      case 'b': case '@b': paint(true, true, fm === 0, true); break;
+      case 'B*': paint(true, true, true, false); break;
+      case 'b*': paint(true, true, true, true); break;
+      case 'W': case 'W*': case 'clip': case 'eoclip': case 'wclip':
+        if (path.length || (cur && cur.segs.length)) { clipPath = true; warn.add('Есть обтравочные контуры (PowerClip) — сами контуры обтравки в замеры не входят.'); }
+        break;
+      case 'Tl': case 'translate': if ((a = pop(2))) ctm = mul([1, 0, 0, 1, a[0], a[1]], ctm); break;
+      case 'scale': if ((a = pop(2))) ctm = mul([a[0], 0, 0, a[1], 0, 0], ctm); break;
+      case 'rotate': if ((a = pop(1))) { const r = a[0] * Math.PI / 180, c = Math.cos(r), s = Math.sin(r); ctm = mul([c, s, -s, c, 0, 0], ctm); } break;
+      case 'concat': { const m = st.pop(); if (m && m.arr && m.arr.length === 6) ctm = mul(m.arr, ctm); break; }
+      case 'gsave': case '@gs': case 'q': save(); break;
+      case 'grestore': case '@gr': case 'Q': restore(); break;
+      case 'save': case '@sv': save(); break;
+      case 'restore': case '@rs': restore(); break;
+      case '@j': save(); newPath(); break;
+      case '@J': restore(); break;
+      case '@rax': if (gs.length) { const g = gs[gs.length - 1]; ctm = g.ctm.slice(); } newPath(); break;
+      case '[': marks.push(st.length); break;
+      case ']': { const k = marks.pop(); if (k === undefined) break; const arr = st.splice(k); st.push({ arr: arr.every(v => typeof v === 'number') ? arr : [] }); break; }
+      case 'def': { const v = st.pop(), k = st.pop(); if (k && k.lit === '$fm' && typeof v === 'number') fm = v === 1 ? 1 : 0; break; }
+      case 'create_cmyk_color': if ((a = pop(4))) lastColor = a; break;
+      case 'set_outline': if (lastColor) stroke = lastColor; break;
+      case 'set_solid_fill': if (lastColor) fill = lastColor; break;
+      case 'G': if ((a = pop(1))) stroke = [0, 0, 0, 1 - a[0]]; break;
+      case 'g': if ((a = pop(1))) fill = [0, 0, 0, 1 - a[0]]; break;
+      case 'K': if ((a = pop(4))) stroke = a; break;
+      case 'k': if ((a = pop(4))) fill = a; break;
+      case 'setcmykcolor': if ((a = pop(4))) stroke = fill = a; break;
+      case 'setgray': if ((a = pop(1))) stroke = fill = [0, 0, 0, 1 - a[0]]; break;
+      case 'setrgbcolor': if ((a = pop(3))) { const k = 1 - Math.max(...a); stroke = fill = k >= 1 ? [0, 0, 0, 1] : [(1 - a[0] - k) / (1 - k), (1 - a[1] - k) / (1 - k), (1 - a[2] - k) / (1 - k), k]; } break;
+      case 'dup': if (st.length) st.push(st[st.length - 1]); break;
+      case 'pop': st.pop(); break;
+      case 'exch': if (st.length > 1) { const x = st.pop(), y = st.pop(); st.push(x, y); } break;
+      case 'show': case 'ashow': case 'widthshow': case 'awidthshow': case 'xshow': case 'xyshow': case 'kshow': case '@t': case 'Tj': case 'TJ':
+        warn.add('В файле есть текст шрифтом — он не измеряется. Переведите текст в кривые (Ctrl+Q).'); st.length = 0; break;
+      case 'image': case 'colorimage': case 'imagemask': case 'output_image': case '@cc':
+        warn.add('В файле есть растровые изображения — они не измеряются.'); st.length = 0; break;
+      default: break; // прочие операторы (стиль линии, цвета, служебные) на геометрию не влияют
+    }
+  }
+  return { objects, warn };
+}
+
+/* ================= Геометрия ================= */
+
+const GX = [-0.906179845938664, -0.5384693101056831, 0, 0.5384693101056831, 0.906179845938664];
+const GW = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891];
+function speed(a, t) {
+  const m = 1 - t;
+  const dx = 3 * (m * m * (a[2] - a[0]) + 2 * m * t * (a[4] - a[2]) + t * t * (a[6] - a[4]));
+  const dy = 3 * (m * m * (a[3] - a[1]) + 2 * m * t * (a[5] - a[3]) + t * t * (a[7] - a[5]));
+  return Math.hypot(dx, dy);
+}
+function gauss(a, t0, t1) { const h = (t1 - t0) / 2, c = (t0 + t1) / 2; let s = 0; for (let i = 0; i < 5; i++) s += GW[i] * speed(a, c + h * GX[i]); return s * h; }
+function adapt(a, t0, t1, whole, d) {
+  const m = (t0 + t1) / 2, l = gauss(a, t0, m), r = gauss(a, m, t1);
+  if (d >= 24 || Math.abs(l + r - whole) <= LEN_TOL) return l + r;
+  return adapt(a, t0, m, l, d + 1) + adapt(a, m, t1, r, d + 1);
+}
+// длина кубической кривой Безье: адаптивная квадратура Гаусса–Лежандра
+const cubicLen = a => adapt(a, 0, 1, gauss(a, 0, 1), 0);
+
+// «кривая», которая на деле прямая (Corel иногда так пишет отрезки)
+function straightCubic(a) {
+  const dx = a[6] - a[0], dy = a[7] - a[1], L = Math.hypot(dx, dy);
+  if (L < 1e-9) return false;
+  for (const k of [2, 4]) {
+    const px = a[k] - a[0], py = a[k + 1] - a[1];
+    if (Math.abs(px * dy - py * dx) / L > 1e-4) return false;
+    const t = (px * dx + py * dy) / (L * L);
+    if (t < -1e-6 || t > 1 + 1e-6) return false;
+  }
+  return true;
+}
+
+const bez = (a, t) => { const m = 1 - t; return [m * m * m * a[0] + 3 * m * m * t * a[2] + 3 * m * t * t * a[4] + t * t * t * a[6], m * m * m * a[1] + 3 * m * m * t * a[3] + 3 * m * t * t * a[5] + t * t * t * a[7]]; };
+
+function flatCubic(a, out, d) {
+  const dx = a[6] - a[0], dy = a[7] - a[1], L = Math.hypot(dx, dy) || 1e-12;
+  const d1 = Math.abs((a[2] - a[0]) * dy - (a[3] - a[1]) * dx) / L, d2 = Math.abs((a[4] - a[0]) * dy - (a[5] - a[1]) * dx) / L;
+  const near = Math.hypot(a[2] - a[0], a[3] - a[1]) + Math.hypot(a[4] - a[6], a[5] - a[7]);
+  if (d >= 16 || (Math.max(d1, d2) <= FLAT_TOL && near <= L * 2 + FLAT_TOL)) { out.push(a[6], a[7]); return; }
+  const [x0, y0, x1, y1, x2, y2, x3, y3] = a;
+  const ax = (x0 + x1) / 2, ay = (y0 + y1) / 2, bx = (x1 + x2) / 2, by = (y1 + y2) / 2, cx = (x2 + x3) / 2, cy = (y2 + y3) / 2;
+  const abx = (ax + bx) / 2, aby = (ay + by) / 2, bcx = (bx + cx) / 2, bcy = (by + cy) / 2, mx = (abx + bcx) / 2, my = (aby + bcy) / 2;
+  flatCubic([x0, y0, ax, ay, abx, aby, mx, my], out, d + 1);
+  flatCubic([mx, my, bcx, bcy, cx, cy, x3, y3], out, d + 1);
+}
+
+function cubicExtrema(a, k) { // корни производной по оси k (0=x,1=y)
+  const p0 = a[k], p1 = a[k + 2], p2 = a[k + 4], p3 = a[k + 6];
+  const A = -p0 + 3 * p1 - 3 * p2 + p3, B = 2 * (p0 - 2 * p1 + p2), C = p1 - p0, r = [];
+  if (Math.abs(A) < 1e-12) { if (Math.abs(B) > 1e-12) r.push(-C / B); }
+  else { const D = B * B - 4 * A * C; if (D >= 0) { const q = Math.sqrt(D); r.push((-B + q) / (2 * A), (-B - q) / (2 * A)); } }
+  return r.filter(t => t > 0 && t < 1);
+}
+
+function pip(poly, x, y) {
+  let ins = false;
+  for (let i = 0, n = poly.length, j = n - 2; i < n; j = i, i += 2) {
+    const xi = poly[i], yi = poly[i + 1], xj = poly[j], yj = poly[j + 1];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins;
+  }
+  return ins;
+}
+function distPoly(poly, x, y, closed) {
+  let best = Infinity; const n = poly.length;
+  for (let i = 0; i + 2 < n + (closed ? 2 : 0); i += 2) {
+    const ax = poly[i], ay = poly[i + 1], bx = poly[(i + 2) % n], by = poly[(i + 3) % n];
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    let t = L2 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+    best = Math.min(best, Math.hypot(x - ax - t * dx, y - ay - t * dy));
+  }
+  return best;
+}
+
+function makeContour(sub, color) {
+  let len = 0, curve = 0, line = 0, nc = 0, nl = 0;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const ext = (x, y) => { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; };
+  const poly = [sub.segs[0][0], sub.segs[0][1]];
+  ext(poly[0], poly[1]);
+  for (const s of sub.segs) {
+    if (s.length === 4 || straightCubic(s)) {
+      const ex = s[s.length - 2], ey = s[s.length - 1], L = Math.hypot(ex - s[0], ey - s[1]);
+      len += L; line += L; if (L > 1e-9) nl++;
+      poly.push(ex, ey); ext(ex, ey);
+    } else {
+      const L = cubicLen(s); len += L; curve += L; nc++;
+      ext(s[6], s[7]);
+      for (const k of [0, 1]) for (const t of cubicExtrema(s, k)) { const p = bez(s, t); ext(p[0], p[1]); }
+      flatCubic(s, poly, 0);
+    }
+  }
+  const first = sub.segs[0], last = sub.segs[sub.segs.length - 1];
+  const closed = sub.closed || Math.hypot(last[last.length - 2] - first[0], last[last.length - 1] - first[1]) < 1e-3;
+  let area = 0;
+  for (let i = 0, n = poly.length, j = n - 2; i < n; j = i, i += 2) area += poly[j] * poly[i + 1] - poly[i] * poly[j + 1];
+  area = Math.abs(area) / 2;
+  const c = { segs: sub.segs, closed, len, curve, line, nc, nl, x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, poly, area, color };
+  c.shape = classify(c);
+  return c;
+}
+
+function classify(c) {
+  if (!c.closed) return { type: 'open' };
+  if (c.nc === 0 && c.nl === 4 && c.segs.every(s => { const ex = s[s.length - 2], ey = s[s.length - 1]; return Math.abs(ex - s[0]) < 1e-3 || Math.abs(ey - s[1]) < 1e-3; }))
+    return { type: 'rect' };
+  if (c.nc >= 2 && c.line < 1e-3 * c.len) {
+    const cx = (c.x0 + c.x1) / 2, cy = (c.y0 + c.y1) / 2, a = c.w / 2, b = c.h / 2;
+    let ok = a > 0 && b > 0;
+    for (const s of c.segs) {
+      if (!ok) break;
+      for (let t = 0; t <= 1; t += 0.125) {
+        const p = s.length === 8 ? bez(s, t) : [s[0] + (s[2] - s[0]) * t, s[1] + (s[3] - s[1]) * t];
+        if (Math.abs(((p[0] - cx) / a) ** 2 + ((p[1] - cy) / b) ** 2 - 1) > 2e-3) { ok = false; break; }
+      }
+    }
+    if (ok) return Math.abs(c.w - c.h) <= 1e-3 * Math.max(c.w, c.h) ? { type: 'circle', d: (c.w + c.h) / 2 } : { type: 'ellipse', a: Math.max(c.w, c.h), b: Math.min(c.w, c.h) };
+  }
+  return { type: c.nc ? 'curve' : 'poly' };
+}
+
+/* ================= Модель документа ================= */
+
+const cmykRgb = k => [0, 1, 2].map(i => Math.round(255 * (1 - Math.min(1, k[i])) * (1 - Math.min(1, k[3]))));
+const hex = rgb => '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
+const COLOR_NAMES = { '#000000': 'Чёрный', '#ff0000': 'Красный', '#0000ff': 'Синий', '#00ff00': 'Зелёный', '#ff00ff': 'Пурпурный', '#00ffff': 'Голубой', '#ffff00': 'Жёлтый', '#ff8000': 'Оранжевый' };
+
+function buildModel(text, name) {
+  const dsc = parseDSC(text);
+  const { objects, warn } = interpret(text);
+  const box = dsc.hires || dsc.bbox;
+  let gx0 = Infinity, gy0 = Infinity;
+  for (const o of objects) for (const s of o.subs) for (const g of s.segs) for (let i = 0; i < g.length; i += 2) { gx0 = Math.min(gx0, g[i]); gy0 = Math.min(gy0, g[i + 1]); }
+  if (!box) warn.add('В файле нет BoundingBox — размер листа взят по геометрии.');
+  const ox = box ? box[0] : gx0, oy = box ? box[1] : gy0;
+  const contours = [];
+  const colors = new Map();
+  objects.forEach((o, oi) => {
+    const col = hex(cmykRgb(o.stroke || o.fill || [0, 0, 0, 1]));
+    for (const s of o.subs) {
+      const sub = { closed: s.closed, segs: s.segs.map(g => g.map((v, i) => (v - (i % 2 ? oy : ox)) * PT2MM)) };
+      const c = makeContour(sub, col);
+      if (c.len < 1e-6) continue;
+      c.obj = oi; c.id = contours.length; contours.push(c);
+      colors.set(col, (colors.get(col) || 0) + 1);
+    }
+  });
+  if (!contours.length) throw new Error('В файле не найдено векторных контуров. Возможно, это растр или текст не переведён в кривые.');
+  let docW, docH;
+  if (box) { docW = (box[2] - box[0]) * PT2MM; docH = (box[3] - box[1]) * PT2MM; }
+  else { docW = Math.max(...contours.map(c => c.x1)); docH = Math.max(...contours.map(c => c.y1)); }
+  // рамка листа: прямоугольник по размеру документа (±1.5 мм)
+  let frame = null;
+  for (const c of contours) if (c.shape.type === 'rect' && Math.abs(c.w - docW) < 1.5 && Math.abs(c.h - docH) < 1.5 && (!frame || c.area > frame.area)) frame = c;
+  if (frame) frame.isFrame = true;
+  // дубликаты (одинаковая геометрия поверх друг друга)
+  const seen = new Map(); let dup = 0;
+  for (const c of contours) {
+    const k = [c.x0, c.y0, c.x1, c.y1, c.len].map(v => v.toFixed(2)).join('|');
+    if (seen.has(k)) { c.dup = true; dup++; } else seen.set(k, c);
+  }
+  if (dup) warn.add(`Найдено дублей контуров (лежат друг на друге): ${dup}. Они не считаются.`);
+  return { name, text, dsc, docW, docH, contours, frame, colors, warn: [...warn], nObjects: objects.length };
+}
+
+function analyze(M) {
+  const on = c => !c.isFrame && !c.dup && !S.off.includes(c.color);
+  const closed = M.contours.filter(c => on(c) && c.closed).sort((a, b) => b.area - a.area);
+  const open = M.contours.filter(c => on(c) && !c.closed);
+  for (const c of M.contours) { c.parent = null; c.kids = []; c.role = c.isFrame ? 'frame' : c.dup ? 'dup' : null; c.no = 0; }
+  for (let i = 0; i < closed.length; i++) {
+    const c = closed[i];
+    const probes = [0, Math.floor(c.poly.length / 6) * 2, Math.floor(c.poly.length / 3) * 2];
+    for (let j = i - 1; j >= 0; j--) {
+      const p = closed[j];
+      if (p.area <= c.area || c.x0 < p.x0 - 1e-6 || c.x1 > p.x1 + 1e-6 || c.y0 < p.y0 - 1e-6 || c.y1 > p.y1 + 1e-6) continue;
+      let k = 0; for (const q of probes) if (pip(p.poly, c.poly[q], c.poly[q + 1])) k++;
+      if (k >= 2) { c.parent = p; p.kids.push(c); break; }
+    }
+    c.depth = c.parent ? c.parent.depth + 1 : 0;
+    c.role = c.depth % 2 ? 'hole' : 'part';
+  }
+  for (const c of open) { c.role = 'open'; c.depth = 0; }
+  const parts = closed.filter(c => c.role === 'part');
+  parts.sort((a, b) => (Math.round(-a.y1 / 20) - Math.round(-b.y1 / 20)) || (a.x0 - b.x0));
+  parts.forEach((c, i) => c.no = i + 1);
+  const holes = closed.filter(c => c.role === 'hole');
+  const sum = (arr, f) => arr.reduce((s, c) => s + f(c), 0);
+  return {
+    parts, holes, open, closed,
+    outer: sum(parts, c => c.len), outerCurve: sum(parts, c => c.curve),
+    holeLen: sum(holes, c => c.len), holeCurve: sum(holes, c => c.curve),
+    openLen: sum(open, c => c.len),
+  };
+}
+
+function sheetInfo(M) {
+  let w, h, src;
+  if (S.customW > 0 && S.customH > 0) { w = S.customW; h = S.customH; src = 'задан вручную'; }
+  else if (M.frame) { w = M.frame.w; h = M.frame.h; src = 'по рамке листа в файле'; }
+  else { w = M.docW; h = M.docH; src = 'по BoundingBox файла'; }
+  const tol = M.frame || S.customW ? 2 : 3;
+  let std = null;
+  for (const [a, b] of STD_SHEETS) if ((Math.abs(w - a) <= tol && Math.abs(h - b) <= tol) || (Math.abs(w - b) <= tol && Math.abs(h - a) <= tol)) std = `${a} × ${b}`;
+  return { w, h, src, std, orient: w > h ? 'альбомный' : 'книжный' };
+}
+
+/* ================= Настройки / недавние ================= */
+
+const S = { dec: 1, labels: true, off: [], customW: 0, customH: 0 };
+try { Object.assign(S, JSON.parse(localStorage.getItem('epsm.set') || '{}')); } catch (e) {}
+const saveS = () => { try { localStorage.setItem('epsm.set', JSON.stringify(S)); } catch (e) {} };
+function recents() { try { return JSON.parse(localStorage.getItem('epsm.recent') || '[]'); } catch (e) { return []; } }
+function addRecent(name, text) {
+  let r = recents().filter(x => x.name !== name);
+  r.unshift({ name, date: Date.now(), text });
+  while (r.length > 1 && JSON.stringify(r).length > 3.5e6) r.pop();
+  r = r.slice(0, 6);
+  try { localStorage.setItem('epsm.recent', JSON.stringify(r)); } catch (e) { try { localStorage.setItem('epsm.recent', JSON.stringify(r.slice(0, 1))); } catch (e2) {} }
+}
+
+const f = (v, d) => (v ?? 0).toFixed(d ?? S.dec).replace('.', ',');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const TYPE_RU = { rect: 'Прямоугольник', circle: 'Круг', ellipse: 'Эллипс', curve: 'Контур', poly: 'Многоугольник', open: 'Незамкнутая линия' };
+const shapeText = c => c.shape.type === 'circle' ? `Ø${f(c.shape.d)}` : c.shape.type === 'ellipse' ? `эллипс ${f(c.shape.a)}×${f(c.shape.b)}` : `${f(c.w)}×${f(c.h)}`;
+
+/* ================= Просмотр ================= */
+
+const cv = $('cv'), ctx = cv.getContext('2d');
+let M = null, A = null, sel = null, V = { s: 1, ox: 0, oy: 0 }, dpr = 1, need = false;
+
+function fit() {
+  if (!M) return;
+  const r = cv.getBoundingClientRect(), W = Math.max(M.docW, 1), H = Math.max(M.docH, 1), pad = 14;
+  V.s = Math.min((r.width - 2 * pad) / W, (r.height - 2 * pad) / H);
+  V.ox = (r.width - W * V.s) / 2; V.oy = (r.height + H * V.s) / 2;
+  redraw();
+}
+function zoomAt(px, py, k) {
+  const mx = (px - V.ox) / V.s, my = (V.oy - py) / V.s;
+  V.s = Math.max(0.01, Math.min(V.s * k, 400));
+  V.ox = px - mx * V.s; V.oy = py + my * V.s; redraw();
+}
+const redraw = () => { if (!need) { need = true; requestAnimationFrame(draw); } };
+
+function p2d(c) {
+  if (c.p2d) return c.p2d;
+  const p = new Path2D();
+  p.moveTo(c.segs[0][0], c.segs[0][1]);
+  for (const s of c.segs) s.length === 4 ? p.lineTo(s[2], s[3]) : p.bezierCurveTo(s[2], s[3], s[4], s[5], s[6], s[7]);
+  if (c.closed) p.closePath();
+  return (c.p2d = p);
+}
+const selPart = () => sel ? (sel.role === 'hole' ? sel.parent : sel.role === 'part' ? sel : null) : null;
+
+function draw() {
+  need = false;
+  const r = cv.getBoundingClientRect();
+  dpr = window.devicePixelRatio || 1;
+  const W = Math.round(r.width * dpr), H = Math.round(r.height * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#e5e7eb'; ctx.fillRect(0, 0, W, H);
+  if (!M) return;
+  const s = V.s;
+  ctx.setTransform(dpr * s, 0, 0, -dpr * s, dpr * V.ox, dpr * V.oy);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, M.docW, M.docH);
+  const part = selPart();
+  if (part) {
+    const p = new Path2D(); p.addPath(p2d(part)); for (const h of part.kids) p.addPath(p2d(h));
+    ctx.fillStyle = 'rgba(37,99,235,.16)'; ctx.fill(p, 'evenodd');
+  }
+  if (sel && sel.role === 'hole') { ctx.fillStyle = 'rgba(234,88,12,.25)'; ctx.fill(p2d(sel)); }
+  ctx.lineWidth = 1 / s;
+  for (const c of M.contours) {
+    const off = c.role === null || c.role === 'dup';
+    ctx.strokeStyle = c.isFrame ? '#9ca3af' : off ? '#c7cbd1' : c.color;
+    ctx.stroke(p2d(c));
+  }
+  if (part) {
+    ctx.lineWidth = 2.5 / s; ctx.strokeStyle = '#2563eb'; ctx.stroke(p2d(part));
+    ctx.strokeStyle = '#ea580c'; for (const h of part.kids) ctx.stroke(p2d(h));
+  }
+  if (sel && sel.role === 'open') { ctx.lineWidth = 3 / s; ctx.strokeStyle = '#16a34a'; ctx.stroke(p2d(sel)); }
+  if (sel && sel.role === 'hole') { ctx.lineWidth = 3 / s; ctx.strokeStyle = '#ea580c'; ctx.stroke(p2d(sel)); }
+  if (S.labels && A) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = '600 12px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const c of A.parts) {
+      if (Math.min(c.w, c.h) * s < 22) continue;
+      const x = V.ox + (c.x0 + c.x1) / 2 * s, y = V.oy - (c.y0 + c.y1) / 2 * s;
+      if (x < -20 || y < -20 || x > r.width + 20 || y > r.height + 20) continue;
+      const t = String(c.no), tw = ctx.measureText(t).width + 8;
+      ctx.fillStyle = c === part ? '#2563eb' : 'rgba(31,41,55,.75)';
+      ctx.fillRect(x - tw / 2, y - 9, tw, 18);
+      ctx.fillStyle = '#fff'; ctx.fillText(t, x, y + 0.5);
+    }
+  }
+}
+
+function hit(px, py) {
+  if (!A) return null;
+  const x = (px - V.ox) / V.s, y = (V.oy - py) / V.s;
+  let best = null;
+  for (const c of A.closed) {
+    if (x < c.x0 || x > c.x1 || y < c.y0 || y > c.y1) continue;
+    if ((!best || c.area < best.area) && pip(c.poly, x, y)) best = c;
+  }
+  if (best) return best;
+  const tol = 14 / V.s; let bd = tol;
+  for (const c of A.open) {
+    if (x < c.x0 - tol || x > c.x1 + tol || y < c.y0 - tol || y > c.y1 + tol) continue;
+    const d = distPoly(c.poly, x, y, false); if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+
+/* --- жесты --- */
+const P = new Map(); let G = null;
+const rel = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId); P.set(e.pointerId, rel(e));
+  const pts = [...P.values()];
+  if (pts.length === 1) G = { t: 'pan', sx: pts[0].x, sy: pts[0].y, lx: pts[0].x, ly: pts[0].y, at: Date.now(), moved: false };
+  else if (pts.length === 2) G = { t: 'pinch', d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), mx: (pts[0].x + pts[1].x) / 2, my: (pts[0].y + pts[1].y) / 2 };
+});
+cv.addEventListener('pointermove', e => {
+  if (!P.has(e.pointerId) || !G) return;
+  P.set(e.pointerId, rel(e)); const pts = [...P.values()];
+  if (G.t === 'pan' && pts.length === 1) {
+    const p = pts[0]; V.ox += p.x - G.lx; V.oy += p.y - G.ly; G.lx = p.x; G.ly = p.y;
+    if (Math.hypot(p.x - G.sx, p.y - G.sy) > 8) G.moved = true;
+    redraw();
+  } else if (G.t === 'pinch' && pts.length >= 2) {
+    const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
+    V.ox += mx - G.mx; V.oy += my - G.my;
+    if (G.d > 0) zoomAt(mx, my, d / G.d);
+    G.d = d; G.mx = mx; G.my = my;
+  }
+});
+const up = e => {
+  if (!P.has(e.pointerId)) return;
+  const p = rel(e);
+  if (G && G.t === 'pan' && !G.moved && Date.now() - G.at < 600) { sel = hit(p.x, p.y); redraw(); renderPanel(); }
+  P.delete(e.pointerId);
+  const rest = [...P.values()];
+  G = rest.length === 1 ? { t: 'pan', sx: rest[0].x, sy: rest[0].y, lx: rest[0].x, ly: rest[0].y, at: 0, moved: true } : null;
+};
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+cv.addEventListener('wheel', e => { e.preventDefault(); const p = rel(e); zoomAt(p.x, p.y, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+$('zIn').onclick = () => { const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1.6); };
+$('zOut').onclick = () => { const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1 / 1.6); };
+$('zFit').onclick = fit;
+new ResizeObserver(redraw).observe(cv);
+
+/* ================= Панель замеров ================= */
+
+function kv(rows) { return '<div class="kv">' + rows.filter(Boolean).map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join('') + '</div>'; }
+function shapeRows(c) {
+  const t = c.shape.type, rows = [];
+  if (t === 'circle') {
+    const d = c.shape.d;
+    rows.push(['Диаметр', `<b>${f(d)} мм</b>`], ['Радиус', `${f(d / 2)} мм`], ['Длина окружности', `${f(c.len)} мм`], ['Площадь', `${f(Math.PI * d * d / 4 / 1e6, 4)} м²`]);
+  } else if (t === 'ellipse') {
+    const a = c.shape.a / 2, b = c.shape.b / 2, h = ((a - b) / (a + b)) ** 2;
+    rows.push(['Большая ось', `<b>${f(c.shape.a)} мм</b>`], ['Малая ось', `<b>${f(c.shape.b)} мм</b>`], ['Периметр', `${f(c.len)} мм`],
+      ['Периметр (Рамануджан)', `${f(Math.PI * (a + b) * (1 + 3 * h / (10 + Math.sqrt(4 - 3 * h))))} мм`], ['Площадь', `${f(Math.PI * a * b / 1e6, 4)} м²`]);
+  } else {
+    rows.push(['Габарит (Ш × В)', `<b>${f(c.w)} × ${f(c.h)} мм</b>`], [c.closed ? 'Периметр' : 'Длина', `<b>${f(c.len)} мм</b>`]);
+    if (c.curve > 0) rows.push(['в т.ч. прямые', `${f(c.line)} мм`], ['в т.ч. кривые', `${f(c.curve)} мм`]);
+  }
+  return rows;
+}
+function holeGroups(hs) {
+  const g = new Map();
+  for (const h of hs) { const k = TYPE_RU[h.shape.type] + ' ' + shapeText(h); g.set(k, (g.get(k) || 0) + 1); }
+  return [...g].map(([k, n]) => `${esc(k)}${n > 1 ? ` × ${n}` : ''}`).join('<br>');
+}
+
+function renderPanel() {
+  const el = $('panel');
+  if (!M) { el.innerHTML = '<div class="sub">Откройте EPS-файл, экспортированный из CorelDRAW.</div>'; return; }
+  const W = M.warn.length ? M.warn.map(w => `<div class="warn">${esc(w)}</div>`).join('') : '';
+  if (!sel) {
+    const sh = sheetInfo(M);
+    el.innerHTML = `<div class="ttl">Лист ${f(sh.w)} × ${f(sh.h)} мм</div>
+      <div class="sub">${sh.std ? `<span class="ok">стандарт ${sh.std}</span>` : '<span class="no">нестандартный размер</span>'} · ${sh.src}</div>` +
+      kv([['Деталей', `<b>${A.parts.length}</b>`], ['Внешний периметр', `<b>${f(A.outer)} мм</b>`], ['Отверстий / вырезов', `${A.holes.length}`],
+        ['Периметр отверстий', `${f(A.holeLen)} мм`], A.open.length && ['Незамкнутые линии', `${A.open.length} · ${f(A.openLen)} мм`],
+        ['Рез всего', `${f((A.outer + A.holeLen + A.openLen) / 1000, 3)} м`]]) +
+      `<div class="sub" style="margin-top:6px">Нажмите на деталь, чтобы увидеть её размеры.</div>` + W;
+    return;
+  }
+  const c = sel;
+  if (c.role === 'part') {
+    const hl = c.kids.reduce((s, h) => s + h.len, 0);
+    el.innerHTML = `<div class="ttl">Деталь №${c.no} · ${TYPE_RU[c.shape.type]}</div>` +
+      kv([...shapeRows(c),
+        ['Отверстий / вырезов', `<b>${c.kids.length}</b>`],
+        c.kids.length && ['Периметр отверстий', `${f(hl)} мм`],
+        c.kids.length && ['', `<span class="sub">${holeGroups(c.kids)}</span>`],
+        c.shape.type !== 'circle' && c.shape.type !== 'ellipse' && ['Площадь (без отв.)', `${f((c.area - c.kids.reduce((s, h) => s + h.area, 0)) / 1e6, 4)} м²`],
+        c.kids.length && ['Рез детали (внеш.+отв.)', `${f(c.len + hl)} мм`]]);
+  } else if (c.role === 'hole') {
+    el.innerHTML = `<div class="ttl">Отверстие / вырез · ${TYPE_RU[c.shape.type]}</div>` +
+      kv([...shapeRows(c), ['Принадлежит', `детали №${c.parent.no}`]]) +
+      `<div class="row"><button id="toPart">Показать деталь №${c.parent.no}</button></div>`;
+    $('toPart').onclick = () => { sel = c.parent; redraw(); renderPanel(); };
+  } else {
+    el.innerHTML = `<div class="ttl">Незамкнутая линия</div>` + kv(shapeRows(c)) + '<div class="sub">Не является деталью: контур не замкнут.</div>';
+  }
+}
+
+/* ================= Отчёт ================= */
+
+function reportRows() {
+  return A.parts.map(c => {
+    const hl = c.kids.reduce((s, h) => s + h.len, 0);
+    const size = c.shape.type === 'circle' ? [c.shape.d, c.shape.d] : [c.w, c.h];
+    return { no: c.no, type: TYPE_RU[c.shape.type] + (c.shape.type === 'circle' ? ` Ø${f(c.shape.d)}` : ''), w: size[0], h: size[1], per: c.len, curve: c.curve, holes: c.kids.length, holeLen: hl };
+  });
+}
+function renderReport() {
+  const sh = sheetInfo(M), rows = reportRows();
+  $('reportBody').innerHTML = `
+  <div class="card"><div class="ttl">${esc(M.name)}</div>${kv([
+    ['Лист (Ш × В)', `<b>${f(sh.w)} × ${f(sh.h)} мм</b> (${sh.orient})`],
+    ['Формат', sh.std ? `<span class="ok">стандартный ${sh.std}</span>` : '<span class="no">нестандартный</span>'],
+    ['Размер определён', sh.src],
+    ['BoundingBox EPS', `${f(M.docW, 2)} × ${f(M.docH, 2)} мм`],
+    ['Деталей', `<b>${A.parts.length}</b>`],
+    ['Векторных объектов / контуров', `${M.nObjects} / ${M.contours.length}`]])}</div>
+  <div class="card"><div class="ttl">Итого по листу</div>${kv([
+    ['Внешний периметр деталей', `<b>${f(A.outer)} мм</b>`],
+    ['в т.ч. криволинейные участки', `${f(A.outerCurve)} мм`],
+    ['Отверстий / вырезов', `<b>${A.holes.length}</b>`],
+    ['Периметр отверстий (отдельно)', `<b>${f(A.holeLen)} мм</b>`],
+    ['в т.ч. криволинейные участки', `${f(A.holeCurve)} мм`],
+    A.open.length && ['Незамкнутые линии', `${A.open.length} шт · ${f(A.openLen)} мм`],
+    ['Общая длина реза', `<b>${f(A.outer + A.holeLen + A.openLen)} мм</b> (${f((A.outer + A.holeLen + A.openLen) / 1000, 3)} м)`]])}
+    <div class="sub" style="margin-top:6px">Отверстия не входят во внешний периметр. Длины кривых Безье — численное интегрирование, допуск ${LEN_TOL} мм.</div>
+    ${M.warn.map(w => `<div class="warn">${esc(w)}</div>`).join('')}</div>
+  <div class="tw"><table><thead><tr><th>№</th><th>Тип</th><th>Ширина, мм</th><th>Высота, мм</th><th>Периметр внеш., мм</th><th>Кривые, мм</th><th>Отв., шт</th><th>Периметр отв., мм</th></tr></thead><tbody>
+  ${rows.map(r => `<tr><td>${r.no}</td><td>${esc(r.type)}</td><td>${f(r.w)}</td><td>${f(r.h)}</td><td>${f(r.per)}</td><td>${f(r.curve)}</td><td>${r.holes}</td><td>${f(r.holeLen)}</td></tr>`).join('')}
+  <tr><th></th><th>Итого</th><th></th><th></th><th>${f(A.outer)}</th><th>${f(A.outerCurve)}</th><th>${A.holes.length}</th><th>${f(A.holeLen)}</th></tr>
+  </tbody></table></div>`;
+}
+function reportTable(sep) {
+  const sh = sheetInfo(M), d = S.dec;
+  const n = v => v.toFixed(d).replace('.', ',');
+  const q = s => sep === ';' && /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const L = [
+    ['Файл', M.name], ['Лист, мм', `${n(sh.w)} x ${n(sh.h)}`], ['Формат', sh.std ? 'стандартный ' + sh.std : 'нестандартный'], ['Деталей', A.parts.length], [],
+    ['№', 'Тип', 'Ширина, мм', 'Высота, мм', 'Периметр внешний, мм', 'Кривые, мм', 'Отверстий, шт', 'Периметр отверстий, мм'],
+    ...reportRows().map(r => [r.no, r.type, n(r.w), n(r.h), n(r.per), n(r.curve), r.holes, n(r.holeLen)]),
+    ['', 'Итого', '', '', n(A.outer), n(A.outerCurve), A.holes.length, n(A.holeLen)], [],
+    ['Общая длина реза, мм', n(A.outer + A.holeLen + A.openLen)],
+  ];
+  return L.map(r => r.map(v => q(String(v))).join(sep)).join('\r\n');
+}
+$('bReport').onclick = () => { if (!M) return; renderReport(); $('report').classList.add('on'); };
+$('rCopy').onclick = async () => {
+  const t = reportTable('\t');
+  if (window.Android) { Android.copy(t); toast('Скопировано'); return; }
+  try { await navigator.clipboard.writeText(t); toast('Скопировано'); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('Скопировано'); }
+};
+$('rCsv').onclick = () => {
+  const name = M.name.replace(/\.[^.]+$/, '') + '_отчёт.csv', text = '﻿' + reportTable(';');
+  if (window.Android) Android.saveFile(name, 'text/csv', text);
+  else saveFile(name, new Blob([text], { type: 'text/csv;charset=utf-8' }));
+};
+$('rPdf').onclick = () => {
+  const name = M.name.replace(/\.[^.]+$/, '') + '_отчёт';
+  if (window.Android) { Android.print(name); return; }
+  document.title = name; window.print(); document.title = 'EPS Замер';
+};
+async function saveFile(name, blob) {
+  if (window.showSaveFilePicker) {
+    try { const h = await showSaveFilePicker({ suggestedName: name }); const w = await h.createWritable(); await w.write(blob); await w.close(); toast('Сохранено'); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Файл сохранён в «Загрузки»');
+}
+function toast(t) { const d = document.createElement('div'); d.textContent = t; d.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:8px 14px;border-radius:8px;z-index:30'; document.body.appendChild(d); setTimeout(() => d.remove(), 1800); }
+
+/* ================= Настройки ================= */
+
+function renderSettings() {
+  const cols = M ? [...M.colors] : [];
+  $('setBody').innerHTML = `
+  <div class="card"><div class="ttl">Точность отображения</div>
+    <select id="sDec">${[0, 1, 2, 3].map(d => `<option value="${d}" ${S.dec === d ? 'selected' : ''}>${d} знак(а) после запятой</option>`).join('')}</select>
+    <div class="sub" style="margin-top:6px">Влияет только на вывод. Расчёт всегда идёт по исходным координатам EPS.</div></div>
+  <div class="card"><label class="chk"><input type="checkbox" id="sLab" ${S.labels ? 'checked' : ''}> Показывать номера деталей на листе</label></div>
+  <div class="card"><div class="ttl">Размер листа вручную</div>
+    <div class="row"><input type="number" id="sW" placeholder="ширина" value="${S.customW || ''}"> × <input type="number" id="sH" placeholder="высота" value="${S.customH || ''}"> мм</div>
+    <div class="sub" style="margin-top:6px">Пусто — определить из файла. Стандарты: ${STD_SHEETS.map(s => s.join('×')).join(', ')}.</div></div>
+  ${cols.length ? `<div class="card"><div class="ttl">Цвета контуров</div><div class="sub">Снимите галочку, чтобы не считать контуры этого цвета (например, разметку).</div>
+    ${cols.map(([c, n]) => `<label class="chk"><input type="checkbox" data-col="${c}" ${S.off.includes(c) ? '' : 'checked'}><span class="sw" style="background:${c}"></span>${COLOR_NAMES[c] || c} — ${n} шт.</label>`).join('')}</div>` : ''}
+  <div class="card"><button id="sClr">Очистить недавние файлы</button></div>`;
+  const apply = () => {
+    S.dec = +$('sDec').value; S.labels = $('sLab').checked;
+    S.customW = +$('sW').value || 0; S.customH = +$('sH').value || 0;
+    S.off = [...document.querySelectorAll('[data-col]')].filter(x => !x.checked).map(x => x.dataset.col);
+    saveS(); if (M) { A = analyze(M); if (sel && !sel.role) sel = null; } redraw(); renderPanel();
+  };
+  $('setBody').querySelectorAll('input,select').forEach(x => x.onchange = apply);
+  $('sClr').onclick = () => { try { localStorage.removeItem('epsm.recent'); } catch (e) {} renderHome(); toast('Очищено'); };
+}
+$('bSet').onclick = () => { renderSettings(); $('settings').classList.add('on'); };
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.modal').classList.remove('on'));
+
+/* ================= Загрузка ================= */
+
+function renderHome() {
+  const r = recents();
+  $('recent').innerHTML = r.length ? '<div class="sub" style="margin-bottom:6px">Недавние файлы</div>' + r.map((x, i) =>
+    `<div class="it" data-i="${i}"><span>${esc(x.name)}</span><span class="sub">${new Date(x.date).toLocaleDateString('ru-RU')}</span></div>`).join('') : '';
+  $('recent').querySelectorAll('.it').forEach(d => d.onclick = () => { const x = recents()[+d.dataset.i]; if (x) load(x.name, () => x.text); });
+}
+function load(name, getText) {
+  $('busy').classList.add('on');
+  setTimeout(() => {
+    try {
+      const text = getText();
+      const m = buildModel(text, name);
+      M = m; sel = null; A = analyze(M);
+      $('fname').textContent = name; $('home').style.display = 'none';
+      addRecent(name, text);
+      fit(); renderPanel();
+    } catch (e) {
+      console.error(e);
+      alert('Не удалось открыть файл «' + name + '».\n\n' + (e.message || e));
+    } finally { $('busy').classList.remove('on'); }
+  }, 30);
+}
+const openPicker = () => $('file').click();
+$('bOpen').onclick = openPicker; $('bOpen2').onclick = openPicker;
+$('file').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  let buf;
+  try { buf = await file.arrayBuffer(); } catch (err) { alert('Не удалось прочитать файл.'); return; }
+  load(file.name, () => extractPS(buf));
+};
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', async e => { e.preventDefault(); const file = e.dataTransfer.files[0]; if (file) { const buf = await file.arrayBuffer(); load(file.name, () => extractPS(buf)); } });
+
+// вызовы из Android-обёртки
+window.openFromAndroid = (name, b64) => load(name, () => {
+  const bin = atob(b64), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return extractPS(u8.buffer);
+});
+window.androidBack = () => {
+  const m = document.querySelector('.modal.on');
+  if (m) { m.classList.remove('on'); return true; }
+  if (sel) { sel = null; redraw(); renderPanel(); return true; }
+  if (M && $('home').style.display === 'none') { $('home').style.display = ''; renderHome(); return true; }
+  return false;
+};
+
+renderHome(); renderPanel(); redraw();
+const qf = new URLSearchParams(location.search).get('file');
+if (qf) fetch(qf).then(r => r.arrayBuffer()).then(buf => load(qf.split('/').pop(), () => extractPS(buf)));
+</script>
+</body>
+</html>
